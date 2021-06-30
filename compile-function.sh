@@ -1,5 +1,4 @@
 #!/bin/bash
-
 set -e
 
 # Copy function
@@ -13,4 +12,6 @@ cd /server
 
 # Build the function and redirect stdout & stderr from the compilation step to the k8s output log
 cargo install --path .
-cargo build --release -Z unstable-options --out-dir $KUBELESS_INSTALL_VOLUME > /dev/termination-log 2>&1
+cargo build > /dev/termination-log 2>&1
+mv ./target/debug/server $KUBELESS_INSTALL_VOLUME
+mv ./Rocket.toml $KUBELESS_INSTALL_VOLUME

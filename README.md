@@ -1,2 +1,2 @@
-# kubeless-lucet
-Lucet runtime integration for Kubeless.
+# kubeless-wasm
+WebAssembly runtime integration for Kubeless.

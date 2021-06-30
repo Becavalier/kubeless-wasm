@@ -1,5 +1,6 @@
-FROM bitnami/minideb:jessie
-
+# FROM bitnami/minideb:latest
+FROM rust:1.53
+RUN apt-get update && apt-get install -y vim
 USER 1000
-
-CMD [ "/kubeless/server" ]
+WORKDIR /kubeless
+CMD ["./server"]

@@ -5,4 +5,5 @@ COPY /compile-function.sh /
 COPY server /server
 RUN  chown 1000:1000 /server -R
 WORKDIR /server
+
 USER 1000
