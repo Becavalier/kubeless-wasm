@@ -101,39 +101,15 @@ impl Serialize for MyWasmerValue {
     }
 }
 
-#[get("/")]
-fn test() -> status::Custom<Json<MyWasmerValue>> {
-    let wasm_path = format!(
-        "{}{}{}",
-        env::current_dir().unwrap().to_str().unwrap(),
-        "/mods/",
-        "hello.wasm"
-    );
-
-    // Return result as response.
-    status::Custom(
-        Status::Ok,
-        Json(MyWasmerValue(handle_wasm(
-            &wasm_path,
-            &mut String::from("_start"),
-            None,
-        ))),
-    )
-}
-
 #[post("/", data = "<input>")]
 fn handler(input: String) -> status::Custom<Json<MyWasmerValue>> {
-    let class_name = env::var("MOD_NAME").unwrap_or(String::from("/mods/hello.wasm")); // File name.
+    let class_name = env::var("MOD_NAME").unwrap_or(String::from("_")); // File name.
     let method_name = env::var("FUNC_HANDLER").unwrap_or(String::from("_start")); // Function name.
+    let root_path = env::var("KUBELESS_INSTALL_VOLUME").unwrap_or(String::new());
     let _timeout = env::var("FUNC_TIMEOUT").unwrap_or(String::new());
     let _runtime = env::var("FUNC_RUNTIME").unwrap_or(String::new());
     let _memory_limit = env::var("FUNC_MEMORY_LIMIT").unwrap_or(String::new());
-    let wasm_path = format!(
-        "{}{}{}",
-        env::current_dir().unwrap().to_str().unwrap(),
-        "/",
-        class_name
-    );
+    let wasm_path = format!("{}{}{}{}", root_path, "/", class_name, ".wasm");
 
     // Return result as response.
     status::Custom(
@@ -160,6 +136,5 @@ fn rocket() -> _ {
     }))
     .mount("/healthz", routes![healthz])
     .mount("/metrics", routes![metrics])
-    .mount("/test", routes![test])
     .mount("/", routes![handler])
 }
