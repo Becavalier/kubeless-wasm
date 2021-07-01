@@ -1,4 +1,4 @@
 FROM bitnami/minideb:latest
-COPY /compile-function.sh /
+COPY /preload.sh /
 COPY /server/target/debug/server /
 USER 1000
