@@ -6,4 +6,4 @@ set -e
 # cd /server
 # cargo install --path .
 # cargo build > /dev/termination-log 2>&1
-mv /server $KUBELESS_INSTALL_VOLUME
+cp /server $KUBELESS_INSTALL_VOLUME

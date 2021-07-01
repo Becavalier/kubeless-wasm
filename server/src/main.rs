@@ -1,16 +1,21 @@
 #[macro_use]
 extern crate rocket;
+use prometheus::{gather, histogram_opts, register_histogram, Encoder, TextEncoder};
 use rocket::config::Config;
 use rocket::figment::Figment;
 use rocket::http::Status;
 use rocket::response::status;
 use rocket::serde::json::Json;
 use rocket::serde::ser::{Serialize, SerializeTuple, Serializer};
+use rocket::State;
+use std::env;
 use std::net::{IpAddr, Ipv4Addr};
 use wasmer::{imports, Instance, Module, Store, Value};
 use wasmer_wasi::WasiState;
+use wasmer_compiler_llvm::LLVM;
+use wasmer_engine_universal::Universal;
 
-use std::env;
+struct Hist(prometheus::Histogram);
 
 #[get("/")]
 fn healthz() -> Status {
@@ -18,19 +23,31 @@ fn healthz() -> Status {
 }
 
 #[get("/")]
-fn metrics() -> Status {
-    Status::Ok
+fn metrics() -> String {
+    let mut buffer = vec![];
+    let encoder = TextEncoder::new();
+    let metric_families = gather();
+    encoder.encode(&metric_families, &mut buffer).unwrap();
+    String::from_utf8(buffer).unwrap()
 }
 
 fn handle_wasm(
+    hist: &State<Hist>,
     wasm_path: &String,
     method_name: &mut String,
     args: Option<&String>,
 ) -> Box<[Value]> {
+    // Start timer for profiling.
+    let timer = hist.0.start_timer();
+
+    // Load Wasm bytes.
     let wasm_bytes = std::fs::read(wasm_path).unwrap();
 
+    // Use LLVM compiler with the default settings.
+    let compiler = LLVM::default();
+
     // Create a Store.
-    let store = Store::default();
+    let store = Store::new(&Universal::new(compiler).engine());
 
     // Compile the Wasm module.
     let module = Module::new(&store, wasm_bytes).unwrap();
@@ -77,7 +94,9 @@ fn handle_wasm(
     }
 
     // Call funtion and return the result.
-    func.call(&args_vec).unwrap()
+    let result = func.call(&args_vec).unwrap();
+    timer.stop_and_record();
+    result
 }
 
 struct MyWasmerValue(Box<[Value]>);
@@ -102,10 +121,10 @@ impl Serialize for MyWasmerValue {
 }
 
 #[post("/", data = "<input>")]
-fn handler(input: String) -> status::Custom<Json<MyWasmerValue>> {
-    let class_name = env::var("MOD_NAME").unwrap_or(String::from("_")); // File name.
-    let method_name = env::var("FUNC_HANDLER").unwrap_or(String::from("_start")); // Function name.
-    let root_path = env::var("KUBELESS_INSTALL_VOLUME").unwrap_or(String::new());
+fn handler(input: String, hist: &State<Hist>) -> status::Custom<Json<MyWasmerValue>> {
+    let class_name = env::var("MOD_NAME").unwrap_or(String::from("fib")); // File name.
+    let method_name = env::var("FUNC_HANDLER").unwrap_or(String::from("fib")); // Function name.
+    let root_path = env::var("KUBELESS_INSTALL_VOLUME").unwrap_or(String::from("./mods"));
     let _timeout = env::var("FUNC_TIMEOUT").unwrap_or(String::new());
     let _runtime = env::var("FUNC_RUNTIME").unwrap_or(String::new());
     let _memory_limit = env::var("FUNC_MEMORY_LIMIT").unwrap_or(String::new());
@@ -115,6 +134,7 @@ fn handler(input: String) -> status::Custom<Json<MyWasmerValue>> {
     status::Custom(
         Status::Ok,
         Json(MyWasmerValue(handle_wasm(
+            hist,
             &wasm_path,
             &mut String::from(method_name),
             Some(&input),
@@ -134,6 +154,13 @@ fn rocket() -> _ {
         address: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
         ..Config::default()
     }))
+    .manage(Hist(
+        register_histogram!(histogram_opts!(
+            "function_duration_seconds",
+            "Duration of user function in seconds"
+        ))
+        .unwrap(),
+    ))
     .mount("/healthz", routes![healthz])
     .mount("/metrics", routes![metrics])
     .mount("/", routes![handler])
