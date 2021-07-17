@@ -6,7 +6,7 @@
       version: "1.0",
       images: [{
         phase: "compilation",
-        image: "becavalier/kubeless:v1@sha256:5eeb3744b8fa850c3b178eaf57479dace551e70b8be87def33156c48b5a14314",
+        image: "becavalier/kubeless:v1@sha256:38558a2c9ed625ae3ba07af08648641b133ff5b5baa899fb28ab832faa238270",
         command: "/bin/bash /preload.sh"
        }, {
         phase: "runtime",
